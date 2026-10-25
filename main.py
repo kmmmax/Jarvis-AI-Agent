@@ -53,28 +53,30 @@ def tokens_in_chat(messages: list) -> int:
     return count_of_tokens
 
 
-def truncate_messages(messages: list) -> list:
-    head_size = 1 if messages and messages[0].get("role") == "system" else 0
+def truncate_messages(messages: list) -> tuple[list, bool]:
 
-    while len(messages) > head_size + 1 and tokens_in_chat(messages) > TOKEN_LIMIT:
-        next_user_idx = next(
-            (
-                i
-                for i in range(head_size + 1, len(messages))
-                if messages[i].get("role") == "user"
-            ),
-            None,
-        )
-        if next_user_idx is None:
+    is_critical_overflow = False
+
+    while len(messages) > 2 and tokens_in_chat(messages) > TOKEN_LIMIT:
+        user_indexes = []
+        for i in range(len(messages)):
+            if messages[i].get("role") == "user":
+                user_indexes.append(i)
+
+        if len(user_indexes) < 2:
+            messages = [messages[0], messages[user_indexes[0]]]
+            is_critical_overflow = True
             break
-        messages = messages[:head_size] + messages[next_user_idx:]
 
-    return messages
+        second_user_index = user_indexes[1]
+        messages = [messages[0]] + messages[second_user_index:]
+
+    return messages, is_critical_overflow
 
 
 def start_chat_mode() -> None:
     messages = [{"role": "system", "content": system_prompt}]
-    MAX_TOOL_ITERATIONS = 1
+    MAX_TOOL_ITERATIONS = 20
 
     print()
     while True:
@@ -85,16 +87,27 @@ def start_chat_mode() -> None:
             print("🚪 Диалог завершен")
             return 0
 
-        messages.append({"role": "user", "content": user_message})
+        user_tokens = tokens_in_chat([{"role": "user", "content": user_message}])
+        system_tokens = tokens_in_chat([{"role": "system", "content": system_prompt}])
 
-        messages = truncate_messages(messages)
+        if user_tokens + system_tokens > TOKEN_LIMIT:
+            print(
+                f"\033[91m🚫 Ваш запрос слишком длинный! ({user_tokens} токенов). Пожалуйста, напишите короче.\033[0m\n"
+            )
+            continue
+
+        messages.append({"role": "user", "content": user_message})
 
         tool_iteration = 0
 
         while tool_iteration < MAX_TOOL_ITERATIONS:
             tool_iteration += 1
 
-            messages = truncate_messages(messages)
+            messages, is_critical = truncate_messages(messages)
+            if is_critical:
+                print(
+                    f"\n\033[91m🚨 Переполнение лимита токенов ({TOKEN_LIMIT})! История сброшена до вашего текущего запроса. Модель начинает размышления с нуля.\033[0m\n"
+                )
 
             try:
                 stream = client.chat(
@@ -110,7 +123,7 @@ def start_chat_mode() -> None:
                 )
             except Exception as e:
                 logger.error(f"Программа прервана, ошибка - {e}")
-                print("🚨 Произошла ошибка, извините!\n")
+                print("\033[91m🚨 Произошла ошибка, извините!\033[0m\n")
                 break
 
             flag_for_first_response = True
@@ -120,8 +133,6 @@ def start_chat_mode() -> None:
 
             if tool_iteration == 1:
                 print("⏳ ", end="")
-            else:
-                print("", end="")
 
             for chunk in stream:
                 if chunk.get("message", {}).get("tool_calls"):
@@ -220,7 +231,9 @@ def start_chat_mode() -> None:
                     )
 
         else:
-            print(f"\033[0m🚫 Достигнут лимит вызовов инструментов!\n")
+            print(
+                f"\033[91m🚫 Достигнут лимит вызовов инструментов! ({MAX_TOOL_ITERATIONS})\033[0m\n"
+            )
 
 
 def start_generate_mode() -> None:
@@ -229,24 +242,22 @@ def start_generate_mode() -> None:
     while True:
 
         user_message = str(input("💬 Введите ваш запрос: "))
-        message_is_spaces = user_message.isspace()
 
-        if (
-            (user_message == "exit")
-            or (user_message == "stop")
-            or (user_message == "")
-            or (message_is_spaces == True)
-        ):
+        if user_message in ["exit", "stop", ""] or user_message.isspace():
             print("🚪 Диалог завершен")
             return 0
 
-        user_message = system_prompt + "\n" + user_message
-        if tokens_in_chat([{"role": "user", "content": user_message}]) > TOKEN_LIMIT:
-            print(f"🚫 Ваш запрос превысил лимит токенов! ({TOKEN_LIMIT})\n")
+        full_message = system_prompt + "\n" + user_message
+        user_tokens = len(tokenizer.encode(user_message))
+
+        if len(tokenizer.encode(full_message)) > TOKEN_LIMIT:
+            print(
+                f"\033[91m🚫 Ваш запрос слишком длинный! ({user_tokens} токенов). Пожалуйста, напишите короче.\033[0m\n"
+            )
             continue
 
         try:
-            stream = client.generate(model=MODEL, prompt=user_message, stream=True)
+            stream = client.generate(model=MODEL, prompt=full_message, stream=True)
             flag_for_first_response = True
             is_clock_printed = False
 
@@ -279,10 +290,7 @@ def start_generate_mode() -> None:
             print("\n", end="")
         except Exception as e:
             logger.error(f"Программа прервана, ошибка - {e}")
-            print("🚨 Произошла ошибка, извините!")
-            return 0
-
-        return 0
+            print("\033[91m🚨 Произошла ошибка, извините!\033[0m\n")
 
 
 def main():
@@ -297,7 +305,7 @@ def main():
                 "Для выхода - введите stop, exit или сочетание клавиш Ctrl+C.\n\n"
                 f"🧠 Текущая модель: {MODEL}\n"
                 f"📊 Лимит токенов для нее: {TOKEN_LIMIT}\n"
-                f"📚 Лимит истории собщений для режима Chat: {CHAT_LIMIT}\n"
+                f"📋 Токенов в системном промпте: {len(tokenizer.encode(system_prompt))}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
                 f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n\n"
                 f"🚀 Доступные инструменты:\n"
