@@ -1,19 +1,35 @@
 from __future__ import annotations
 import silence_warnings
 from tools.get_current_time import get_current_time, DEFAULT_TIMEZONE
-from tools.get_weather import get_weather, DEFAULT_CITY
+from tools.get_weather import get_weather, DEFAULT_CITY, PROXIES
 from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
 from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
 import ollama
+from ollama import Client
 from transformers import AutoTokenizer
+from dotenv import load_dotenv
 from loguru import logger
+import base64
+import os
 import sys
 
 sys.stderr = silence_warnings.original_stderr
 logger.remove()
 logger.add(sys.stderr)
+
+load_dotenv()
+host = os.getenv("OLLAMA_HOST")
+user = os.getenv("OLLAMA_USER")
+password = os.getenv("OLLAMA_PASSWORD")
+
+if user and password:
+    auth_string = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("utf-8")
+    client = Client(host=host, headers={"Authorization": f"Basic {auth_string}"})
+else:
+    client = Client(host=host)
+
 
 MODEL = "qwen3.5-9b-8k"
 MODEL_ID = "Qwen/Qwen3.5-9B"
@@ -94,7 +110,7 @@ def start_chat_mode() -> None:
             user_message = prompt("💬 Введите ваш запрос: ", key_bindings=bindings)
         except KeyboardInterrupt:
             print("\033[0m🚪 Прервано по KeyboardInterrupt")
-            return 0            
+            return 0
 
         if user_message in ["exit", "stop", ""] or user_message.isspace():
             print("🚪 Диалог завершен")
@@ -111,6 +127,7 @@ def start_chat_mode() -> None:
 
         messages.append({"role": "user", "content": user_message})
 
+        is_clock_printed = False
         tool_iteration = 0
 
         while tool_iteration < MAX_TOOL_ITERATIONS:
@@ -123,7 +140,7 @@ def start_chat_mode() -> None:
                 )
 
             try:
-                stream = ollama.chat(
+                stream = client.chat(
                     model=MODEL,
                     messages=messages,
                     stream=True,
@@ -144,11 +161,12 @@ def start_chat_mode() -> None:
             final_message = ""
             tool_calls = []
 
-            if tool_iteration == 1:
-                print("⏳ ", end="")
-
             try:
                 for chunk in stream:
+                    if not is_clock_printed:
+                        print("⏳ ", end="")
+                        is_clock_printed = True
+
                     if chunk.get("message", {}).get("tool_calls"):
                         tool_calls.extend(chunk.get("message", {}).get("tool_calls"))
 
@@ -156,7 +174,9 @@ def start_chat_mode() -> None:
                         chunk.get("message", {}).get("thinking") != ""
                     ):
                         print("\033[90m", end="", flush=True)
-                        print(chunk.get("message", {}).get("thinking"), end="", flush=True)
+                        print(
+                            chunk.get("message", {}).get("thinking"), end="", flush=True
+                        )
                         is_thinking_printed = True
 
                     elif (
@@ -169,7 +189,9 @@ def start_chat_mode() -> None:
                             print(f"\n🤖 Ответ от {MODEL}: ", end="", flush=True)
                         else:
                             print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
-                        print(chunk.get("message", {}).get("content"), end="", flush=True)
+                        print(
+                            chunk.get("message", {}).get("content"), end="", flush=True
+                        )
                         flag_for_first_response = False
                         final_message += chunk.get("message", {}).get("content")
 
@@ -178,7 +200,9 @@ def start_chat_mode() -> None:
                         and (chunk.get("message", {}).get("content") != "")
                         and not flag_for_first_response
                     ):
-                        print(chunk.get("message", {}).get("content"), end="", flush=True)
+                        print(
+                            chunk.get("message", {}).get("content"), end="", flush=True
+                        )
                         final_message += chunk.get("message", {}).get("content")
 
                     else:
@@ -277,7 +301,7 @@ def start_generate_mode() -> None:
             continue
 
         try:
-            stream = ollama.generate(model=MODEL, prompt=full_message, stream=True)
+            stream = client.generate(model=MODEL, prompt=full_message, stream=True)
             flag_for_first_response = True
             is_clock_printed = False
 
@@ -330,6 +354,7 @@ def main():
                 f"📊 Лимит токенов для нее: {TOKEN_LIMIT}\n"
                 f"📋 Токенов в системном промпте: {len(tokenizer.encode(system_prompt))}\n"
                 f"🔄 Лимит вызовов функций за один запрос: {MAX_TOOL_ITERATIONS}\n"
+                f"🌐 Установленные прокси: {', '.join(PROXIES.values()) if PROXIES else 'нет'}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
                 f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n\n"
                 "🚀 Доступные инструменты:\n"
