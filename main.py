@@ -4,8 +4,9 @@ from tools.get_current_time import get_current_time, DEFAULT_TIMEZONE
 from tools.get_weather import get_weather, DEFAULT_CITY
 from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
+from prompt_toolkit import prompt
+from prompt_toolkit.key_binding import KeyBindings
 import ollama
-from ollama import Client
 from transformers import AutoTokenizer
 from loguru import logger
 import sys
@@ -18,9 +19,18 @@ MODEL = "qwen3.5-9b-8k"
 MODEL_ID = "Qwen/Qwen3.5-9B"
 CHAT_LIMIT = 10
 TOKEN_LIMIT = 8192
+MAX_TOOL_ITERATIONS = 20
+
+bindings = KeyBindings()
+
+
+@bindings.add("c-c")
+def _(event):
+    raise KeyboardInterrupt
+
+
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
-client = Client(host="http://192.168.88.251:11434")
 
 with open("system_prompt.txt", mode="r", encoding="utf-8") as f:
     system_prompt = f.read()
@@ -76,12 +86,15 @@ def truncate_messages(messages: list) -> tuple[list, bool]:
 
 def start_chat_mode() -> None:
     messages = [{"role": "system", "content": system_prompt}]
-    MAX_TOOL_ITERATIONS = 20
 
     print()
     while True:
         print("\033[0m", end="")
-        user_message = str(input("💬 Введите ваш запрос: "))
+        try:
+            user_message = prompt("💬 Введите ваш запрос: ", key_bindings=bindings)
+        except KeyboardInterrupt:
+            print("\033[0m🚪 Прервано по KeyboardInterrupt")
+            return 0            
 
         if user_message in ["exit", "stop", ""] or user_message.isspace():
             print("🚪 Диалог завершен")
@@ -110,7 +123,7 @@ def start_chat_mode() -> None:
                 )
 
             try:
-                stream = client.chat(
+                stream = ollama.chat(
                     model=MODEL,
                     messages=messages,
                     stream=True,
@@ -134,41 +147,45 @@ def start_chat_mode() -> None:
             if tool_iteration == 1:
                 print("⏳ ", end="")
 
-            for chunk in stream:
-                if chunk.get("message", {}).get("tool_calls"):
-                    tool_calls.extend(chunk.get("message", {}).get("tool_calls"))
+            try:
+                for chunk in stream:
+                    if chunk.get("message", {}).get("tool_calls"):
+                        tool_calls.extend(chunk.get("message", {}).get("tool_calls"))
 
-                if (chunk.get("message", {}).get("thinking") != None) and (
-                    chunk.get("message", {}).get("thinking") != ""
-                ):
-                    print("\033[90m", end="", flush=True)
-                    print(chunk.get("message", {}).get("thinking"), end="", flush=True)
-                    is_thinking_printed = True
+                    if (chunk.get("message", {}).get("thinking") != None) and (
+                        chunk.get("message", {}).get("thinking") != ""
+                    ):
+                        print("\033[90m", end="", flush=True)
+                        print(chunk.get("message", {}).get("thinking"), end="", flush=True)
+                        is_thinking_printed = True
 
-                elif (
-                    (chunk.get("message", {}).get("content") != None)
-                    and (chunk.get("message", {}).get("content") != "")
-                    and flag_for_first_response
-                ):
-                    print("\033[0m", end="", flush=True)
-                    if is_thinking_printed:
-                        print(f"\n🤖 Ответ от {MODEL}: ", end="", flush=True)
+                    elif (
+                        (chunk.get("message", {}).get("content") != None)
+                        and (chunk.get("message", {}).get("content") != "")
+                        and flag_for_first_response
+                    ):
+                        print("\033[0m", end="", flush=True)
+                        if is_thinking_printed:
+                            print(f"\n🤖 Ответ от {MODEL}: ", end="", flush=True)
+                        else:
+                            print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
+                        print(chunk.get("message", {}).get("content"), end="", flush=True)
+                        flag_for_first_response = False
+                        final_message += chunk.get("message", {}).get("content")
+
+                    elif (
+                        (chunk.get("message", {}).get("content") != None)
+                        and (chunk.get("message", {}).get("content") != "")
+                        and not flag_for_first_response
+                    ):
+                        print(chunk.get("message", {}).get("content"), end="", flush=True)
+                        final_message += chunk.get("message", {}).get("content")
+
                     else:
-                        print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
-                    print(chunk.get("message", {}).get("content"), end="", flush=True)
-                    flag_for_first_response = False
-                    final_message += chunk.get("message", {}).get("content")
-
-                elif (
-                    (chunk.get("message", {}).get("content") != None)
-                    and (chunk.get("message", {}).get("content") != "")
-                    and not flag_for_first_response
-                ):
-                    print(chunk.get("message", {}).get("content"), end="", flush=True)
-                    final_message += chunk.get("message", {}).get("content")
-
-                else:
-                    continue
+                        continue
+            except KeyboardInterrupt:
+                print("\n\033[0m🚪 Прервано по KeyboardInterrupt")
+                return 0
 
             if not tool_calls:
                 messages.append({"role": "assistant", "content": final_message})
@@ -240,8 +257,11 @@ def start_generate_mode() -> None:
 
     print()
     while True:
-
-        user_message = str(input("💬 Введите ваш запрос: "))
+        try:
+            user_message = prompt("💬 Введите ваш запрос: ", key_bindings=bindings)
+        except KeyboardInterrupt:
+            print("\033[0m🚪 Прервано по KeyboardInterrupt")
+            return 0
 
         if user_message in ["exit", "stop", ""] or user_message.isspace():
             print("🚪 Диалог завершен")
@@ -257,7 +277,7 @@ def start_generate_mode() -> None:
             continue
 
         try:
-            stream = client.generate(model=MODEL, prompt=full_message, stream=True)
+            stream = ollama.generate(model=MODEL, prompt=full_message, stream=True)
             flag_for_first_response = True
             is_clock_printed = False
 
@@ -288,6 +308,9 @@ def start_generate_mode() -> None:
                 else:
                     continue
             print("\n", end="")
+        except KeyboardInterrupt:
+            print("\n\033[0m🚪 Прервано по KeyboardInterrupt")
+            return 0
         except Exception as e:
             logger.error(f"Программа прервана, ошибка - {e}")
             print("\033[91m🚨 Произошла ошибка, извините!\033[0m\n")
@@ -300,24 +323,28 @@ def main():
     )
     try:
         selected_mode = int(
-            input(
+            prompt(
                 "ИИ-помощник для общения, ответов на вопросы и выполнения задач.\n"
                 "Для выхода - введите stop, exit или сочетание клавиш Ctrl+C.\n\n"
                 f"🧠 Текущая модель: {MODEL}\n"
                 f"📊 Лимит токенов для нее: {TOKEN_LIMIT}\n"
                 f"📋 Токенов в системном промпте: {len(tokenizer.encode(system_prompt))}\n"
+                f"🔄 Лимит вызовов функций за один запрос: {MAX_TOOL_ITERATIONS}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
                 f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n\n"
-                f"🚀 Доступные инструменты:\n"
-                f"⏰ get_current_time — текущее время в любом часовом поясе.\n"
-                f"🧭 get_weather — текущая погода и прогноз на сегодня.\n\n"
+                "🚀 Доступные инструменты:\n"
+                "⏰ get_current_time — текущее время в любом часовом поясе.\n"
+                "🧭 get_weather — текущая погода и прогноз на сегодня.\n\n"
                 "✅ Выберите режим взаимодействия с моделью.\n"
                 "1) Chat - бесконечный цикл с сохранением истории (поддерживает инструменты)\n"
                 "2) Generate - один запрос, один ответ, выход (без использования инструментов!)\n"
-                "Введите цифру: "
+                "Введите цифру: ",
+                key_bindings=bindings,
             )
         )
-
+    except KeyboardInterrupt:
+        print("\033[0m🚪 Прервано по KeyboardInterrupt")
+        return 0
     except ValueError:
         print("🚫 Вы ввели не цифру.")
         return 0
@@ -332,8 +359,4 @@ def main():
 
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt as e:
-        print("\033[0m", end="\n")
-        print("🚪 Прервано по KeyboardInterrupt")
+    main()
