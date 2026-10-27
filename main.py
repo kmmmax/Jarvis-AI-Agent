@@ -110,7 +110,10 @@ def start_chat_mode() -> None:
         print("\033[0m", end="")
         try:
             user_message = prompt(
-                "💬 Введите ваш запрос: ", key_bindings=bindings, multiline=True
+                "💬 Введите ваш запрос: ",
+                key_bindings=bindings,
+                multiline=True,
+                prompt_continuation="",
             )
         except KeyboardInterrupt:
             print("\033[0m🚪 Прервано по KeyboardInterrupt")
@@ -121,7 +124,9 @@ def start_chat_mode() -> None:
             return 0
 
         user_tokens = tokens_in_chat([{"role": "user", "content": user_message}])
-        system_tokens = tokens_in_chat([{"role": "system", "content": system_prompt_chat}])
+        system_tokens = tokens_in_chat(
+            [{"role": "system", "content": system_prompt_chat}]
+        )
 
         if user_tokens + system_tokens > TOKEN_LIMIT:
             print(
@@ -291,6 +296,7 @@ def start_generate_mode() -> None:
                 "💬 Введите ваш запрос: ",
                 key_bindings=bindings,
                 multiline=True,
+                prompt_continuation="",
             )
         except KeyboardInterrupt:
             print("\033[0m🚪 Прервано по KeyboardInterrupt")
