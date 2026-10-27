@@ -218,7 +218,7 @@ def start_chat_mode() -> None:
 
             if not tool_calls:
                 messages.append({"role": "assistant", "content": final_message})
-                print(f"\n({tokens_in_chat(messages)}/{TOKEN_LIMIT})\n")
+                print(f"\n\033[0m({tokens_in_chat(messages)}/{TOKEN_LIMIT})\n")
                 break
 
             messages.append(
