@@ -3,7 +3,7 @@ import os
 
 
 def read_file_content(
-    file_path: str = ".", limit_of_chars: int = 6000, offset: int = 0
+    file_path: str = ".", limit_of_chars: int = 5000, offset: int = 0
 ) -> dict:
 
     if not os.path.exists(file_path):
@@ -81,7 +81,7 @@ read_file_content.tool_description = {
             "\n"
             "Параметры:\n"
             "- file_path (обязательно): путь к файлу ('main.py', '/home/user/notes.txt').\n"
-            "- limit_of_chars (опционально): сколько символов читать за раз. По умолчанию 6000.\n"
+            "- limit_of_chars (опционально): сколько символов читать за раз. По умолчанию 5000.\n"
             "- offset (опционально): с какого индекса начать чтение. По умолчанию 0.\n"
             "\n"
             "Формат ответа:\n"
@@ -102,7 +102,7 @@ read_file_content.tool_description = {
                 },
                 "limit_of_chars": {
                     "type": "integer",
-                    "description": "Максимум символов за раз. По умолчанию 6000.",
+                    "description": "Максимум символов за раз. По умолчанию 5000.",
                     "minimum": 100,
                     "maximum": 20000,
                 },

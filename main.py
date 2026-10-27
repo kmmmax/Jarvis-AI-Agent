@@ -48,8 +48,10 @@ def _(event):
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
 
-with open("system_prompt.txt", mode="r", encoding="utf-8") as f:
-    system_prompt = f.read()
+with open("system_prompt_chat.txt", mode="r", encoding="utf-8") as f:
+    system_prompt_chat = f.read()
+with open("system_prompt_generate.txt", mode="r", encoding="utf-8") as f:
+    system_prompt_generate = f.read()
 
 
 def tokens_in_chat(messages: list) -> int:
@@ -101,13 +103,15 @@ def truncate_messages(messages: list) -> tuple[list, bool]:
 
 
 def start_chat_mode() -> None:
-    messages = [{"role": "system", "content": system_prompt}]
+    messages = [{"role": "system", "content": system_prompt_chat}]
 
     print()
     while True:
         print("\033[0m", end="")
         try:
-            user_message = prompt("💬 Введите ваш запрос: ", key_bindings=bindings)
+            user_message = prompt(
+                "💬 Введите ваш запрос: ", key_bindings=bindings, multiline=True
+            )
         except KeyboardInterrupt:
             print("\033[0m🚪 Прервано по KeyboardInterrupt")
             return 0
@@ -117,7 +121,7 @@ def start_chat_mode() -> None:
             return 0
 
         user_tokens = tokens_in_chat([{"role": "user", "content": user_message}])
-        system_tokens = tokens_in_chat([{"role": "system", "content": system_prompt}])
+        system_tokens = tokens_in_chat([{"role": "system", "content": system_prompt_chat}])
 
         if user_tokens + system_tokens > TOKEN_LIMIT:
             print(
@@ -138,6 +142,7 @@ def start_chat_mode() -> None:
                 print(
                     f"\n\033[91m🚨 Переполнение лимита токенов ({TOKEN_LIMIT})! История сброшена до вашего текущего запроса. Модель начинает размышления с нуля.\033[0m\n"
                 )
+                is_clock_printed = False
 
             try:
                 stream = client.chat(
@@ -282,7 +287,11 @@ def start_generate_mode() -> None:
     print()
     while True:
         try:
-            user_message = prompt("💬 Введите ваш запрос: ", key_bindings=bindings)
+            user_message = prompt(
+                "💬 Введите ваш запрос: ",
+                key_bindings=bindings,
+                multiline=True,
+            )
         except KeyboardInterrupt:
             print("\033[0m🚪 Прервано по KeyboardInterrupt")
             return 0
@@ -291,7 +300,7 @@ def start_generate_mode() -> None:
             print("🚪 Диалог завершен")
             return 0
 
-        full_message = system_prompt + "\n" + user_message
+        full_message = system_prompt_generate + "\n" + user_message
         user_tokens = len(tokenizer.encode(user_message))
 
         if len(tokenizer.encode(full_message)) > TOKEN_LIMIT:
@@ -352,7 +361,8 @@ def main():
                 "Для выхода - введите stop, exit или сочетание клавиш Ctrl+C.\n\n"
                 f"🧠 Текущая модель: {MODEL}\n"
                 f"📊 Лимит токенов для нее: {TOKEN_LIMIT}\n"
-                f"📋 Токенов в системном промпте: {len(tokenizer.encode(system_prompt))}\n"
+                f"📋 Токенов в системном промпте для режима Chat: {len(tokenizer.encode(system_prompt_chat))}\n"
+                f"📋 Токенов в системном промпте для режима Generate: {len(tokenizer.encode(system_prompt_generate))}\n"
                 f"🔄 Лимит вызовов функций за один запрос: {MAX_TOOL_ITERATIONS}\n"
                 f"🌐 Установленные прокси: {', '.join(PROXIES.values()) if PROXIES else 'нет'}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
@@ -360,6 +370,8 @@ def main():
                 "🚀 Доступные инструменты:\n"
                 "⏰ get_current_time — текущее время в любом часовом поясе.\n"
                 "🧭 get_weather — текущая погода и прогноз на сегодня.\n\n"
+                "📌 Enter — перенос строки.\n"
+                "📌 Esc, затем Enter — отправить запрос.\n\n"
                 "✅ Выберите режим взаимодействия с моделью.\n"
                 "1) Chat - бесконечный цикл с сохранением истории (поддерживает инструменты)\n"
                 "2) Generate - один запрос, один ответ, выход (без использования инструментов!)\n"
