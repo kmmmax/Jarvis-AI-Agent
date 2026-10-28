@@ -44,7 +44,7 @@ def list_dir(dir_path: str = ".", limit: int = 50) -> dict:
         result = ""
         for item in items:
             if os.path.isdir(os.path.join(dir_path, item)):
-                result += f"[DIR]   {item}\n"
+                result += f"[DIR]  {item}\n"
             else:
                 result += f"[FILE] {item}\n"
 

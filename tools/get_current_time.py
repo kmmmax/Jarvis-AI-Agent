@@ -2,8 +2,7 @@ from __future__ import annotations
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from tzlocal import get_localzone_name
-
-DEFAULT_TIMEZONE = "Europe/Moscow"
+from config import DEFAULT_TIMEZONE
 
 
 def local_timezone() -> str:

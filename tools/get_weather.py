@@ -1,8 +1,8 @@
 from __future__ import annotations
 import requests
+from config import DEFAULT_CITY, PROXY_PROTOCOL, PROXY_URL
 
-DEFAULT_CITY = "moscow"
-PROXIES = {"http": "http://192.168.88.250:10808"}
+proxies = {PROXY_PROTOCOL: PROXY_URL} if PROXY_PROTOCOL and PROXY_URL else {}
 
 
 def get_weather(city_name: str | None = None) -> dict:
@@ -15,7 +15,7 @@ def get_weather(city_name: str | None = None) -> dict:
         city = DEFAULT_CITY.capitalize()
 
     try:
-        data = requests.get(url, proxies=PROXIES).json()
+        data = requests.get(url, proxies=proxies).json()
 
         current_condition = data["current_condition"][0]
         temperature = current_condition["temp_C"]

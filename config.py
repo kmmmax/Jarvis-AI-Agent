@@ -1,0 +1,20 @@
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+OLLAMA_HOST = os.getenv("OLLAMA_HOST")
+OLLAMA_USER = os.getenv("OLLAMA_USER")
+OLLAMA_PASSWORD = os.getenv("OLLAMA_PASSWORD")
+
+MODEL = os.getenv("MODEL")
+MODEL_ID = os.getenv("MODEL_ID")
+TOKEN_LIMIT = int(os.getenv("TOKEN_LIMIT"))
+MAX_TOOL_ITERATIONS = int(os.getenv("MAX_TOOL_ITERATIONS"))
+CHAT_SERVICE_TOKENS_RESERVE = int(os.getenv("CHAT_SERVICE_TOKENS_RESERVE"))
+GENERATE_SERVICE_TOKENS_RESERVE = int(os.getenv("GENERATE_SERVICE_TOKENS_RESERVE"))
+
+DEFAULT_TIMEZONE = os.getenv("DEFAULT_TIMEZONE")
+DEFAULT_CITY = os.getenv("DEFAULT_CITY")
+PROXY_PROTOCOL = os.getenv("PROXY_PROTOCOL")
+PROXY_URL = os.getenv("PROXY_URL")

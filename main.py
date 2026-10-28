@@ -1,41 +1,52 @@
 from __future__ import annotations
 import silence_warnings
-from tools.get_current_time import get_current_time, DEFAULT_TIMEZONE
-from tools.get_weather import get_weather, DEFAULT_CITY, PROXIES
+from tools.get_current_time import get_current_time
+from tools.get_weather import get_weather, proxies
 from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
+from config import (
+    OLLAMA_HOST,
+    OLLAMA_USER,
+    OLLAMA_PASSWORD,
+    MODEL,
+    MODEL_ID,
+    TOKEN_LIMIT,
+    MAX_TOOL_ITERATIONS,
+    CHAT_SERVICE_TOKENS_RESERVE,
+    GENERATE_SERVICE_TOKENS_RESERVE,
+    DEFAULT_TIMEZONE,
+    DEFAULT_CITY,
+)
 from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
-import ollama
 from ollama import Client
 from transformers import AutoTokenizer
-from dotenv import load_dotenv
 from loguru import logger
+import json
 import base64
-import os
 import sys
 
 sys.stderr = silence_warnings.original_stderr
 logger.remove()
 logger.add(sys.stderr)
 
-load_dotenv()
-host = os.getenv("OLLAMA_HOST")
-user = os.getenv("OLLAMA_USER")
-password = os.getenv("OLLAMA_PASSWORD")
 
-if user and password:
-    auth_string = base64.b64encode(f"{user}:{password}".encode("utf-8")).decode("utf-8")
-    client = Client(host=host, headers={"Authorization": f"Basic {auth_string}"})
+if OLLAMA_USER and OLLAMA_PASSWORD:
+    auth_string = base64.b64encode(
+        f"{OLLAMA_USER}:{OLLAMA_PASSWORD}".encode("utf-8")
+    ).decode("utf-8")
+    client = Client(host=OLLAMA_HOST, headers={"Authorization": f"Basic {auth_string}"})
 else:
-    client = Client(host=host)
+    client = Client(host=OLLAMA_HOST)
 
 
-MODEL = "qwen3.5-9b-8k"
-MODEL_ID = "Qwen/Qwen3.5-9B"
-CHAT_LIMIT = 10
-TOKEN_LIMIT = 8192
-MAX_TOOL_ITERATIONS = 20
+tools = [
+    get_current_time.tool_description,
+    get_weather.tool_description,
+    list_dir.tool_description,
+    read_file_content.tool_description,
+]
+
 
 bindings = KeyBindings()
 
@@ -76,9 +87,12 @@ def tokens_in_chat(messages: list) -> int:
         if tool_calls:
             messages_str += str(tool_calls) + "\n"
 
-    list_of_tokens = tokenizer.encode(messages_str)
-    count_of_tokens = len(list_of_tokens)
-    return count_of_tokens
+    count_of_history_tokens = len(tokenizer.encode(messages_str))
+
+    tools_str = json.dumps(tools, ensure_ascii=False)
+    count_of_tool_tokens = len(tokenizer.encode(tools_str))
+
+    return count_of_history_tokens + count_of_tool_tokens + CHAT_SERVICE_TOKENS_RESERVE
 
 
 def truncate_messages(messages: list) -> tuple[list, bool]:
@@ -123,20 +137,22 @@ def start_chat_mode() -> None:
             print("🚪 Диалог завершен")
             return 0
 
-        user_tokens = tokens_in_chat([{"role": "user", "content": user_message}])
-        system_tokens = tokens_in_chat(
-            [{"role": "system", "content": system_prompt_chat}]
+        added_tokens = tokens_in_chat(
+            [
+                {"role": "system", "content": system_prompt_chat},
+                {"role": "user", "content": user_message},
+            ]
         )
+        text_tokens = len(tokenizer.encode(user_message))
 
-        if user_tokens + system_tokens > TOKEN_LIMIT:
+        if added_tokens > TOKEN_LIMIT:
             print(
-                f"\033[91m🚫 Ваш запрос слишком длинный! ({user_tokens} токенов). Пожалуйста, напишите короче.\033[0m\n"
+                f"\033[91m🚫 Ваш запрос слишком длинный! ({text_tokens} токенов). Пожалуйста, напишите короче.\033[0m\n"
             )
             continue
 
         messages.append({"role": "user", "content": user_message})
 
-        is_clock_printed = False
         tool_iteration = 0
 
         while tool_iteration < MAX_TOOL_ITERATIONS:
@@ -147,35 +163,28 @@ def start_chat_mode() -> None:
                 print(
                     f"\n\033[91m🚨 Переполнение лимита токенов ({TOKEN_LIMIT})! История сброшена до вашего текущего запроса. Модель начинает размышления с нуля.\033[0m\n"
                 )
-                is_clock_printed = False
+
+            flag_for_first_response = True
+            is_clock_printed = False
+            is_thinking_printed = False
+            final_message = ""
+            tool_calls = []
 
             try:
                 stream = client.chat(
                     model=MODEL,
                     messages=messages,
                     stream=True,
-                    tools=[
-                        get_current_time.tool_description,
-                        get_weather.tool_description,
-                        list_dir.tool_description,
-                        read_file_content.tool_description,
-                    ],
+                    options={"num_ctx": TOKEN_LIMIT},
+                    tools=tools,
                 )
-            except Exception as e:
-                logger.error(f"Программа прервана, ошибка - {e}")
-                print("\033[91m🚨 Произошла ошибка, извините!\033[0m\n")
-                break
 
-            flag_for_first_response = True
-            is_thinking_printed = False
-            final_message = ""
-            tool_calls = []
-
-            try:
                 for chunk in stream:
                     if not is_clock_printed:
-                        print("⏳ ", end="")
-                        is_clock_printed = True
+                        thinking_chunk = chunk.get("message", {}).get("thinking")
+                        if thinking_chunk:
+                            print("⏳ ", end="")
+                            is_clock_printed = True
 
                     if chunk.get("message", {}).get("tool_calls"):
                         tool_calls.extend(chunk.get("message", {}).get("tool_calls"))
@@ -196,9 +205,8 @@ def start_chat_mode() -> None:
                     ):
                         print("\033[0m", end="", flush=True)
                         if is_thinking_printed:
-                            print(f"\n🤖 Ответ от {MODEL}: ", end="", flush=True)
-                        else:
-                            print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
+                            print("\n", end="", flush=True)
+                        print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
                         print(
                             chunk.get("message", {}).get("content"), end="", flush=True
                         )
@@ -219,6 +227,10 @@ def start_chat_mode() -> None:
                         continue
             except KeyboardInterrupt:
                 print("\n\033[0m🚪 Прервано по KeyboardInterrupt")
+                return 0
+            except Exception as e:
+                logger.error(f"Программа прервана, ошибка - {e}")
+                print("\033[91m🚨 Произошла ошибка, извините!\033[0m")
                 return 0
 
             if not tool_calls:
@@ -309,32 +321,46 @@ def start_generate_mode() -> None:
         full_message = system_prompt_generate + "\n" + user_message
         user_tokens = len(tokenizer.encode(user_message))
 
-        if len(tokenizer.encode(full_message)) > TOKEN_LIMIT:
+        if (
+            len(tokenizer.encode(full_message)) + GENERATE_SERVICE_TOKENS_RESERVE
+            > TOKEN_LIMIT
+        ):
             print(
                 f"\033[91m🚫 Ваш запрос слишком длинный! ({user_tokens} токенов). Пожалуйста, напишите короче.\033[0m\n"
             )
             continue
 
+        flag_for_first_response = True
+        is_clock_printed = False
+        is_thinking_printed = False
+
         try:
-            stream = client.generate(model=MODEL, prompt=full_message, stream=True)
-            flag_for_first_response = True
-            is_clock_printed = False
+            stream = client.generate(
+                model=MODEL,
+                prompt=full_message,
+                stream=True,
+                options={"num_ctx": TOKEN_LIMIT},
+            )
 
             for chunk in stream:
                 if not is_clock_printed:
-                    print("⏳ ", end="")
-                    is_clock_printed = True
+                    thinking_chunk = chunk.get("thinking")
+                    if thinking_chunk:
+                        print("⏳ ", end="")
+                        is_clock_printed = True
 
                 if (chunk.get("thinking") != None) and (chunk.get("thinking") != ""):
                     print("\033[90m", end="", flush=True)
                     print(chunk.get("thinking"), end="", flush=True)
+                    is_thinking_printed = True
                 elif (
                     (chunk.get("response") != None)
                     and (chunk.get("response") != "")
                     and (flag_for_first_response == True)
                 ):
                     print("\033[0m", end="", flush=True)
-                    print("\n", end="", flush=True)
+                    if is_thinking_printed:
+                        print("\n", end="", flush=True)
                     print(f"🤖 Ответ от {MODEL}: ", end="", flush=True)
                     print(chunk.get("response"), end="", flush=True)
                     flag_for_first_response = False
@@ -347,12 +373,14 @@ def start_generate_mode() -> None:
                 else:
                     continue
             print("\n", end="")
+            return 0
         except KeyboardInterrupt:
             print("\n\033[0m🚪 Прервано по KeyboardInterrupt")
             return 0
         except Exception as e:
             logger.error(f"Программа прервана, ошибка - {e}")
-            print("\033[91m🚨 Произошла ошибка, извините!\033[0m\n")
+            print("\033[91m🚨 Произошла ошибка, извините!\033[0m")
+            return 0
 
 
 def main():
@@ -370,7 +398,7 @@ def main():
                 f"📋 Токенов в системном промпте для режима Chat: {len(tokenizer.encode(system_prompt_chat))}\n"
                 f"📋 Токенов в системном промпте для режима Generate: {len(tokenizer.encode(system_prompt_generate))}\n"
                 f"🔄 Лимит вызовов функций за один запрос: {MAX_TOOL_ITERATIONS}\n"
-                f"🌐 Установленные прокси: {', '.join(PROXIES.values()) if PROXIES else 'нет'}\n"
+                f"🌐 Установленные прокси: {list(proxies.values())[0] if proxies else 'нет'}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
                 f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n\n"
                 "🚀 Доступные инструменты:\n"
