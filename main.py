@@ -4,6 +4,7 @@ from tools.get_current_time import get_current_time
 from tools.get_weather import get_weather, proxies
 from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
+from tools.touch_file import touch_file
 from config import (
     OLLAMA_HOST,
     OLLAMA_USER,
@@ -31,23 +32,6 @@ logger.remove()
 logger.add(sys.stderr)
 
 
-if OLLAMA_USER and OLLAMA_PASSWORD:
-    auth_string = base64.b64encode(
-        f"{OLLAMA_USER}:{OLLAMA_PASSWORD}".encode("utf-8")
-    ).decode("utf-8")
-    client = Client(host=OLLAMA_HOST, headers={"Authorization": f"Basic {auth_string}"})
-else:
-    client = Client(host=OLLAMA_HOST)
-
-
-tools = [
-    get_current_time.tool_description,
-    get_weather.tool_description,
-    list_dir.tool_description,
-    read_file_content.tool_description,
-]
-
-
 bindings = KeyBindings()
 
 
@@ -58,11 +42,30 @@ def _(event):
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID)
 
+tools = [
+    get_current_time.tool_description,
+    get_weather.tool_description,
+    list_dir.tool_description,
+    read_file_content.tool_description,
+    touch_file.tool_description,
+]
+tools_str = json.dumps(tools, ensure_ascii=False)
+count_of_tool_tokens = len(tokenizer.encode(tools_str))
+
 
 with open("system_prompt_chat.txt", mode="r", encoding="utf-8") as f:
     system_prompt_chat = f.read()
 with open("system_prompt_generate.txt", mode="r", encoding="utf-8") as f:
     system_prompt_generate = f.read()
+
+
+if OLLAMA_USER and OLLAMA_PASSWORD:
+    auth_string = base64.b64encode(
+        f"{OLLAMA_USER}:{OLLAMA_PASSWORD}".encode("utf-8")
+    ).decode("utf-8")
+    client = Client(host=OLLAMA_HOST, headers={"Authorization": f"Basic {auth_string}"})
+else:
+    client = Client(host=OLLAMA_HOST)
 
 
 def tokens_in_chat(messages: list) -> int:
@@ -85,12 +88,10 @@ def tokens_in_chat(messages: list) -> int:
             messages_str += content + "\n"
 
         if tool_calls:
-            messages_str += str(tool_calls) + "\n"
+            tool_calls_dicts = [tool_call.model_dump() for tool_call in tool_calls]
+            messages_str += json.dumps(tool_calls_dicts, ensure_ascii=False) + "\n"
 
     count_of_history_tokens = len(tokenizer.encode(messages_str))
-
-    tools_str = json.dumps(tools, ensure_ascii=False)
-    count_of_tool_tokens = len(tokenizer.encode(tools_str))
 
     return count_of_history_tokens + count_of_tool_tokens + CHAT_SERVICE_TOKENS_RESERVE
 
@@ -262,7 +263,7 @@ def start_chat_mode() -> None:
                         {
                             "role": "tool",
                             "tool_name": "get_current_time",
-                            "content": str(result),
+                            "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
                 elif tool_call.function.name == "get_weather":
@@ -271,7 +272,7 @@ def start_chat_mode() -> None:
                         {
                             "role": "tool",
                             "tool_name": "get_weather",
-                            "content": str(result),
+                            "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
                 elif tool_call.function.name == "list_dir":
@@ -280,7 +281,7 @@ def start_chat_mode() -> None:
                         {
                             "role": "tool",
                             "tool_name": "list_dir",
-                            "content": str(result),
+                            "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
                 elif tool_call.function.name == "read_file_content":
@@ -289,7 +290,16 @@ def start_chat_mode() -> None:
                         {
                             "role": "tool",
                             "tool_name": "read_file_content",
-                            "content": str(result),
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )
+                elif tool_call.function.name == "touch_file":
+                    result = touch_file(**tool_call.function.arguments)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": "touch_file",
+                            "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
 

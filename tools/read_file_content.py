@@ -3,7 +3,7 @@ import os
 
 
 def read_file_content(
-    file_path: str = ".", limit_of_chars: int = 5000, offset: int = 0
+    file_path: str = "", limit_of_chars: int = 5000, offset: int = 0
 ) -> dict:
 
     if not os.path.exists(file_path):
