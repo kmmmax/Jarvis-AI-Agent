@@ -5,6 +5,7 @@ from tools.get_weather import get_weather, proxies
 from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
 from tools.touch_file import touch_file
+from tools.write_file import write_file
 from config import (
     OLLAMA_HOST,
     OLLAMA_USER,
@@ -48,6 +49,7 @@ tools = [
     list_dir.tool_description,
     read_file_content.tool_description,
     touch_file.tool_description,
+    write_file.tool_description,
 ]
 tools_str = json.dumps(tools, ensure_ascii=False)
 count_of_tool_tokens = len(tokenizer.encode(tools_str))
@@ -302,6 +304,15 @@ def start_chat_mode() -> None:
                             "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
+                elif tool_call.function.name == "write_file":
+                    result = write_file(**tool_call.function.arguments)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": "write_file",
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )                
 
         else:
             print(
