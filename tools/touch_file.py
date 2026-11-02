@@ -7,7 +7,7 @@ def touch_file(file_path: str = "") -> dict:
     if not file_path:
         return {
             "success": False,
-            "error": f"Не указан путь для файла: {file_path}",
+            "error": "Не указан путь для файла",
             "result": None,
         }
 
