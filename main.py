@@ -6,6 +6,7 @@ from tools.list_dir import list_dir
 from tools.read_file_content import read_file_content
 from tools.touch_file import touch_file
 from tools.write_file import write_file
+from tools.delete_path import delete_path
 from config import (
     OLLAMA_HOST,
     OLLAMA_USER,
@@ -50,6 +51,7 @@ tools = [
     read_file_content.tool_description,
     touch_file.tool_description,
     write_file.tool_description,
+    delete_path.tool_description,
 ]
 tools_str = json.dumps(tools, ensure_ascii=False)
 count_of_tool_tokens = len(tokenizer.encode(tools_str))
@@ -312,7 +314,16 @@ def start_chat_mode() -> None:
                             "tool_name": "write_file",
                             "content": json.dumps(result, ensure_ascii=False),
                         }
-                    )                
+                    )
+                elif tool_call.function.name == "delete_path":
+                    result = delete_path(**tool_call.function.arguments)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": "delete_path",
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )
 
         else:
             print(
