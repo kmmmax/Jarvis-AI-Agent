@@ -28,7 +28,14 @@ def touch_file(file_path: str = "") -> dict:
     except FileExistsError:
         return {
             "success": False,
-            "error": f"Файл уже существует: {file_path}",
+            "error": f"Объект уже существует: {file_path}",
+            "result": None,
+        }
+
+    except IsADirectoryError:
+        return {
+            "success": False,
+            "error": f"Путь уже занят директорией: {file_path}",
             "result": None,
         }
 
