@@ -15,7 +15,20 @@ def delete_path(target_path: str = "") -> dict:
             "result": None,
         }
 
-    absolute_target_path = os.path.realpath(target_path)
+    is_symlink = os.path.islink(target_path)
+
+    if is_symlink:
+        absolute_link = os.path.abspath(target_path)
+
+        parent_dir = os.path.realpath(os.path.dirname(absolute_link))
+
+        absolute_target_path = os.path.join(
+            parent_dir,
+            os.path.basename(absolute_link),
+        )
+    else:
+        absolute_target_path = os.path.realpath(target_path)
+
     root_items = os.listdir("/")
     home_dir = os.path.realpath(os.path.expanduser("~"))
     home_parent = os.path.dirname(home_dir)
@@ -26,6 +39,13 @@ def delete_path(target_path: str = "") -> dict:
         for item in root_items
         if os.path.realpath(os.path.join("/", item)) != home_parent
     ]
+
+    if is_symlink and os.path.dirname(absolute_target_path) == os.sep:
+        return {
+            "success": False,
+            "error": f"Запрещено удалять симлинк из корневой директории: {target_path}",
+            "result": None,
+        }
 
     if absolute_target_path in protected_paths_only:
         if absolute_target_path == target_path:
@@ -61,18 +81,13 @@ def delete_path(target_path: str = "") -> dict:
                 "result": None,
             }
 
-    if os.path.islink(target_path):
-
-        parent_dir = os.path.dirname(target_path)
-        if not parent_dir:
-            parent_dir = os.getcwd()
+    if is_symlink:
 
         if not os.access(parent_dir, os.W_OK):
-            absolute_link = os.path.abspath(target_path)
-            if absolute_link == target_path:
+            if absolute_target_path == target_path:
                 error_msg = f"Нет прав на удаление симлинка: {target_path}. Нет прав на запись в родительскую директорию: {parent_dir}"
             else:
-                error_msg = f"Нет прав на удаление симлинка: {target_path} (абсолютный путь: {absolute_link}). Нет прав на запись в родительскую директорию: {parent_dir}"
+                error_msg = f"Нет прав на удаление симлинка: {target_path} (реальный путь: {absolute_target_path}). Нет прав на запись в родительскую директорию: {parent_dir}"
             return {
                 "success": False,
                 "error": error_msg,
@@ -81,11 +96,12 @@ def delete_path(target_path: str = "") -> dict:
 
         try:
             os.remove(target_path)
-            absolute_link = os.path.abspath(target_path)
-            if absolute_link == target_path:
+            if absolute_target_path == target_path:
                 result_msg = f"Симлинк удалён: {target_path}"
             else:
-                result_msg = f"Симлинк удалён: {target_path} (абсолютный путь: {absolute_link})"
+                result_msg = (
+                    f"Симлинк удалён: {target_path} (реальный путь: {absolute_target_path})"
+                )
             return {
                 "success": True,
                 "error": None,
