@@ -19,6 +19,7 @@ from config import (
     GENERATE_SERVICE_TOKENS_RESERVE,
     DEFAULT_TIMEZONE,
     DEFAULT_CITY,
+    SANDBOX_DIR,
 )
 from prompt_toolkit import prompt
 from prompt_toolkit.key_binding import KeyBindings
@@ -432,7 +433,8 @@ def main():
                 f"🔄 Лимит вызовов функций за один запрос: {MAX_TOOL_ITERATIONS}\n"
                 f"🌐 Установленные прокси: {list(proxies.values())[0] if proxies else 'нет'}\n"
                 f"🌍 Дефолтная таймзона: {DEFAULT_TIMEZONE}\n"
-                f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n\n"
+                f"🏠 Дефолтный город для расчета погоды: {DEFAULT_CITY.capitalize()}\n"
+                f"📂 Текущая рабочая директория: {SANDBOX_DIR}\n\n"
                 "📌 Enter — перенос строки.\n"
                 "📌 Esc, затем Enter — отправить запрос.\n\n"
                 "✅ Выберите режим взаимодействия с моделью.\n"

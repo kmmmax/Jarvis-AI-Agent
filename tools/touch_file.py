@@ -1,5 +1,6 @@
 from __future__ import annotations
 import os
+from config import SANDBOX_DIR
 
 
 def touch_file(file_path: str = "") -> dict:
@@ -11,12 +12,21 @@ def touch_file(file_path: str = "") -> dict:
             "result": None,
         }
 
+    absolute_path = os.path.realpath(file_path)
+    
+    if not absolute_path.startswith(SANDBOX_DIR + os.sep):
+        return {
+            "success": False,
+            "error": f"Доступ запрещён. Создавать файлы можно только внутри песочницы: {SANDBOX_DIR}",
+            "result": None,
+        }
+
     try:
-        parent_dir = os.path.dirname(file_path)
+        parent_dir = os.path.dirname(absolute_path)
         if parent_dir:
             os.makedirs(parent_dir, exist_ok=True)
 
-        with open(file=file_path, mode="x", encoding="utf-8") as f:
+        with open(file=absolute_path, mode="x", encoding="utf-8") as f:
             pass
 
         return {

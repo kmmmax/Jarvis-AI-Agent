@@ -1,24 +1,34 @@
 from __future__ import annotations
 import os
+from config import SANDBOX_DIR
 
 
 def write_file(file_path: str = "", content: str = "") -> dict:
 
-    if not os.path.exists(file_path):
+    absolute_path = os.path.realpath(file_path)
+
+    if not absolute_path.startswith(SANDBOX_DIR + os.sep):
+        return {
+            "success": False,
+            "error": f"Доступ запрещён. Записывать файлы можно только внутри песочницы: {SANDBOX_DIR}",
+            "result": None,
+        }
+
+    if not os.path.exists(absolute_path):
         return {
             "success": False,
             "error": f"Данный путь не существует: {file_path}",
             "result": None,
         }
 
-    if not os.path.isfile(file_path):
+    if not os.path.isfile(absolute_path):
         return {
             "success": False,
             "error": f"Не является файлом: {file_path}",
             "result": None,
         }
 
-    if not os.access(file_path, os.W_OK):
+    if not os.access(absolute_path, os.W_OK):
         return {
             "success": False,
             "error": f"Нет доступа к записи в файл: {file_path}",
@@ -26,7 +36,7 @@ def write_file(file_path: str = "", content: str = "") -> dict:
         }
 
     try:
-        with open(file=file_path, mode="w", encoding="utf-8") as f:
+        with open(file=absolute_path, mode="w", encoding="utf-8") as f:
             f.write(content)
 
         if content == "":
@@ -69,7 +79,7 @@ write_file.tool_description = {
             "и сообщение в 'result'. Если запись прошла успешно, 'success' будет True.\n"
             "\n"
             "ПРАВИЛА ОТВЕТА:\n"
-            "1. Файл должен уже существовать. Если его нет, вернётся ошибка.\n"
+            "1. Файл должен уже существовать и находиться внутри песочницы. Если его нет или путь ведет за её пределы, вернётся ошибка.\n"
             "2. Если пользователь просит «очисти файл», передай content='' (пустую строку).\n"
             "3. Если пользователь просит изменить только часть файла, сначала вызови read_file_content, "
             "измени текст, а затем передай сюда весь новый текст целиком."
