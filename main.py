@@ -7,6 +7,7 @@ from tools.read_file_content import read_file_content
 from tools.touch_file import touch_file
 from tools.write_file import write_file
 from tools.delete_path import delete_path
+from tools.touch_dir import touch_dir
 from config import (
     OLLAMA_HOST,
     OLLAMA_USER,
@@ -51,6 +52,7 @@ tools = [
     list_dir.tool_description,
     read_file_content.tool_description,
     touch_file.tool_description,
+    touch_dir.tool_description,
     write_file.tool_description,
     delete_path.tool_description,
 ]
@@ -304,6 +306,15 @@ def start_chat_mode() -> None:
                         {
                             "role": "tool",
                             "tool_name": "touch_file",
+                            "content": json.dumps(result, ensure_ascii=False),
+                        }
+                    )
+                elif tool_call.function.name == "touch_dir":
+                    result = touch_dir(**tool_call.function.arguments)
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_name": "touch_dir",
                             "content": json.dumps(result, ensure_ascii=False),
                         }
                     )
