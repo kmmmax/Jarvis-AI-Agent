@@ -1,33 +1,50 @@
 from __future__ import annotations
 import os
+from config import SANDBOX_DIR
 
 
 def read_file_content(
     file_path: str = "", limit_of_chars: int = 5000, offset: int = 0
 ) -> dict:
 
-    if not os.path.exists(file_path):
+    if not file_path:
+        return {
+            "success": False,
+            "error": "Не указан путь для файла",
+            "result": None,
+        }
+
+    absolute_path = os.path.realpath(file_path)
+
+    if not absolute_path.startswith(SANDBOX_DIR + os.sep):
+        return {
+            "success": False,
+            "error": f"Доступ запрещён. Читать можно только внутри песочницы: {SANDBOX_DIR}",
+            "result": None,
+        }
+
+    if not os.path.exists(absolute_path):
         return {
             "success": False,
             "error": f"Данный путь не существует: {file_path}",
             "result": None,
         }
 
-    if not os.path.isfile(file_path):
+    if not os.path.isfile(absolute_path):
         return {
             "success": False,
             "error": f"Не является файлом: {file_path}",
             "result": None,
         }
 
-    if os.path.getsize(file_path) == 0:
+    if os.path.getsize(absolute_path) == 0:
         return {
             "success": True,
             "error": None,
             "result": f"Файл пуст (0 байт): {file_path}",
         }
 
-    if not os.access(file_path, os.R_OK):
+    if not os.access(absolute_path, os.R_OK):
         return {
             "success": False,
             "error": f"Нет доступа к чтению файла: {file_path}",
@@ -35,7 +52,7 @@ def read_file_content(
         }
 
     try:
-        with open(file=file_path, mode="r", encoding="utf-8") as f:
+        with open(file=absolute_path, mode="r", encoding="utf-8") as f:
             f.seek(offset)
             content = f.read(limit_of_chars)
 

@@ -28,15 +28,31 @@ def delete_path(target_path: str = "") -> dict:
     try:
         if os.path.islink(target_path):
             os.remove(target_path)
-            return {"success": True, "error": None, "result": f"Симлинк удалён: {target_path}"}
+            return {
+                "success": True,
+                "error": None,
+                "result": f"Симлинк удалён: {target_path}",
+            }
         elif os.path.isfile(absolute_target_path):
             os.remove(absolute_target_path)
-            return {"success": True, "error": None, "result": f"Файл удалён: {target_path}"}
+            return {
+                "success": True,
+                "error": None,
+                "result": f"Файл удалён: {target_path}",
+            }
         elif os.path.isdir(absolute_target_path):
             shutil.rmtree(absolute_target_path)
-            return {"success": True, "error": None, "result": f"Директория удалена: {target_path}"}
+            return {
+                "success": True,
+                "error": None,
+                "result": f"Директория удалена: {target_path}",
+            }
     except Exception as e:
-        return {"success": False, "error": f"Произошла ошибка при удалении: {str(e)}", "result": None}
+        return {
+            "success": False,
+            "error": f"Произошла ошибка при удалении: {str(e)}",
+            "result": None,
+        }
 
 
 delete_path.tool_description = {
@@ -56,7 +72,7 @@ delete_path.tool_description = {
             "и сообщение в 'result'. Если удаление прошло успешно, 'success' будет True.\n"
             "\n"
             "ПРАВИЛА ОТВЕТА:\n"
-            "1. Если путь не существует или находится вне песочницы, вернётся ошибка.\n"
+            "1. Если путь не существует, вернётся ошибка.\n"
             "2. Никогда не пытайся удалить что-то без явной просьбы пользователя."
         ),
         "parameters": {

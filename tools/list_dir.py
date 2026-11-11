@@ -10,6 +10,7 @@ def list_dir(dir_path: str = ".", limit: int = 50) -> dict:
             "error": f"Путь не найден: {dir_path}",
             "result": None,
         }
+
     if not os.path.isdir(dir_path):
         return {
             "success": False,
@@ -110,8 +111,8 @@ list_dir.tool_description = {
                         "Максимум элементов. По умолчанию 50. Минимум 1, максимум 200."
                     ),
                     "minimum": 1,
-                    "maximum": 200
-                }
+                    "maximum": 200,
+                },
             },
             "required": [],
             "additionalProperties": False,

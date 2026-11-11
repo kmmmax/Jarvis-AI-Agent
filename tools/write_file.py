@@ -5,6 +5,13 @@ from config import SANDBOX_DIR
 
 def write_file(file_path: str = "", content: str = "") -> dict:
 
+    if not file_path:
+        return {
+            "success": False,
+            "error": "Не указан путь для файла",
+            "result": None,
+        }
+
     absolute_path = os.path.realpath(file_path)
 
     if not absolute_path.startswith(SANDBOX_DIR + os.sep):
@@ -46,11 +53,7 @@ def write_file(file_path: str = "", content: str = "") -> dict:
                 f"Файл {file_path} успешно перезаписан ({len(content)} символов)"
             )
 
-        return {
-            "success": True,
-            "error": None,
-            "result": result_text
-        }
+        return {"success": True, "error": None, "result": result_text}
 
     except Exception as e:
         return {

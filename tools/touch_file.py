@@ -13,7 +13,7 @@ def touch_file(file_path: str = "") -> dict:
         }
 
     absolute_path = os.path.realpath(file_path)
-    
+
     if not absolute_path.startswith(SANDBOX_DIR + os.sep):
         return {
             "success": False,
@@ -39,13 +39,6 @@ def touch_file(file_path: str = "") -> dict:
         return {
             "success": False,
             "error": f"Объект уже существует: {file_path}",
-            "result": None,
-        }
-
-    except IsADirectoryError:
-        return {
-            "success": False,
-            "error": f"Путь уже занят директорией: {file_path}",
             "result": None,
         }
 
